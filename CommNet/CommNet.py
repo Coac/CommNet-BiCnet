@@ -1,17 +1,22 @@
+import numpy as np
 import tensorflow as tf
 from utils import *
 
 
 class CommNet:
-    def __init__(self):
-        self.NUM_AGENTS = 5
-        self.VECTOR_OBS_LEN = 10
-        self.OUTPUT_LEN = 2
+    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN):
+        self.NUM_AGENTS = NUM_AGENTS
+        self.VECTOR_OBS_LEN = VECTOR_OBS_LEN
+        self.OUTPUT_LEN = OUTPUT_LEN
 
-        H0 = tf.random_uniform(shape=(self.NUM_AGENTS, self.VECTOR_OBS_LEN), dtype="float32")
-        H1 = self.comm_step("comm_step1", H0)
+        self.observation = tf.random_uniform(shape=(self.NUM_AGENTS, self.VECTOR_OBS_LEN), dtype="float32")
+
+        self.observation = tf.placeholder(tf.float32, (self.NUM_AGENTS, self.VECTOR_OBS_LEN), name="observation")
+        H1 = self.comm_step("comm_step1", self.observation)
         H2 = self.comm_step("comm_step2", H1)
         self.out = self.output_layer(H2)
+
+        self.sess = sess
 
     def comm_step(self, name, H):
         with tf.variable_scope(name):
@@ -45,19 +50,33 @@ class CommNet:
                 outputs.append(tf.tanh(tf.matmul(h, w))[0])
             return outputs
 
+    def act(self, observation):
+        return np.array(self.sess.run(self.out, feed_dict={self.observation: observation}))
+
+    def store_transition(self, s, a, r):
+        pass
+
+    def train_step(self):
+        pass
+
 
 if __name__ == '__main__':
     tf.set_random_seed(42)
 
-    commNet = CommNet()
+    NUM_AGENTS = 5
+    VECTOR_OBS_LEN = 10
+    OUTPUT_LEN = 2
 
     with tf.Session() as sess:
+        commNet = CommNet(sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN)
+
         writer = tf.summary.FileWriter("summaries", sess.graph)
 
         sess.run(tf.global_variables_initializer())
 
-        res = sess.run(commNet.out)
-        for i in res:
+        outputs = commNet.act(np.random.random((NUM_AGENTS, VECTOR_OBS_LEN)))
+        print(outputs.shape)
+        for i in outputs:
             print('-----')
             print(i)
 
