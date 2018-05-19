@@ -1,34 +1,26 @@
 import tensorflow as tf
 
 NUM_AGENTS = 5
-SHAPE = (10, 10)
-
-
-def module(hidden_state, communication):
-    with tf.variable_scope('module', reuse=tf.AUTO_REUSE):
-        w_H = tf.get_variable(name='w_H', shape=hidden_state.shape, initializer=tf.random_normal_initializer(0, 0.2))
-        w_C = tf.get_variable(name='w_C', shape=communication.shape, initializer=tf.random_normal_initializer(0, 0.2))
-
-    return tf.tanh(tf.add(tf.matmul(w_H, hidden_state), (tf.matmul(w_C, communication))))
+SHAPE = 10
 
 
 def comm_step(name, H):
-    H_shape = H.shape
     with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
-        # w_H = tf.get_variable(name='w_H', shape=SHAPE, initializer=tf.random_normal_initializer(0, 0.2))
-        # w_C = tf.get_variable(name='w_C', shape=SHAPE, initializer=tf.random_normal_initializer(0, 0.2))
-
-        w_H = tf.get_variable(name='w_H', shape=SHAPE, initializer=tf.constant_initializer(0.99))
+        w_H = tf.get_variable(name='w_H', shape=SHAPE, initializer=tf.constant_initializer(10))
         w_C = tf.get_variable(name='w_C', shape=SHAPE, initializer=tf.constant_initializer(1))
 
         normalized_w_C = tf.divide(w_C, NUM_AGENTS - 1)
-        w_C_matrix = tf.tile(normalized_w_C, [NUM_AGENTS, NUM_AGENTS])
-        w_H_minus_w_C_matrix = block_diagonal([tf.subtract(w_H, normalized_w_C) for i in range(NUM_AGENTS)])
 
+        w_C_matrix = tf.reshape(tf.tile(normalized_w_C, [NUM_AGENTS]), (1, NUM_AGENTS * SHAPE))
+        w_C_matrix = tf.tile(w_C_matrix, [NUM_AGENTS, 1])
+
+        w_H_minus_w_C_matrix = block_diagonal(
+            [tf.reshape(tf.subtract(w_H, normalized_w_C), (1, SHAPE)) for i in range(NUM_AGENTS)])
         T = tf.add(w_C_matrix, w_H_minus_w_C_matrix)
 
-        print(H_shape)
-        return tf.matmul(T, tf.reshape(H, (SHAPE[1] * NUM_AGENTS, SHAPE[0])))
+        H_repeated = tf.tile(H, [1, NUM_AGENTS])
+
+        return tf.reshape(tf.reduce_sum(H_repeated * T, axis=0), H.shape)
 
 
 # Source https://stackoverflow.com/a/42166910
@@ -79,12 +71,18 @@ def block_diagonal(matrices, dtype=tf.float32):
 
 
 if __name__ == '__main__':
-    sess = tf.Session()
-    H = tf.random_uniform(shape=(NUM_AGENTS, SHAPE[0], SHAPE[1]), dtype="float32")
+    tf.set_random_seed(42)
 
+    H = tf.random_uniform(shape=(NUM_AGENTS, SHAPE), dtype="float32")
     out = comm_step("comm_step1", H)
+    out = comm_step("comm_step2", out)
 
-    sess.run(tf.global_variables_initializer())
+    with tf.Session() as sess:
+        writer = tf.summary.FileWriter("summaries", sess.graph)
 
-    print(sess.run(out))
-    print(sess.run(out).shape)
+        sess.run(tf.global_variables_initializer())
+
+        print(sess.run(out))
+        print(sess.run(out).shape)
+
+        writer.close()
