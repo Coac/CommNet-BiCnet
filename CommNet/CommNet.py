@@ -1,10 +1,11 @@
 import numpy as np
 import tensorflow as tf
+from guessing_sum_env import *
 from utils import *
 
 
 class CommNet:
-    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.01):
+    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.0001):
         self.NUM_AGENTS = NUM_AGENTS
         self.VECTOR_OBS_LEN = VECTOR_OBS_LEN
         self.OUTPUT_LEN = OUTPUT_LEN
@@ -20,15 +21,26 @@ class CommNet:
         self.ep_actions = []
         self.ep_rewards = []
 
-        self.target = tf.placeholder(1, name="target")
-        self.loss = -self.dist.log_prob(self.actions) * self.target
+        self.reward = tf.placeholder(1, name="reward")
+
+        with tf.name_scope("loss"):
+            self.loss = tf.reduce_mean(self.dist.log_prob(self.actions) * self.reward)
+            tf.summary.scalar('loss', self.loss)
+
         self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-        self.train_op = self.optimizer.minimize(self.loss)
+
+        with tf.name_scope("train"):
+            self.train_op = self.optimizer.minimize(self.loss)
 
     def comm_step(self, name, H):
         with tf.variable_scope(name):
-            w_H = tf.get_variable(name='w_H', shape=self.VECTOR_OBS_LEN, initializer=tf.constant_initializer(10))
-            w_C = tf.get_variable(name='w_C', shape=self.VECTOR_OBS_LEN, initializer=tf.constant_initializer(1))
+            w_H = tf.get_variable(name='w_H', shape=self.VECTOR_OBS_LEN,
+                                  initializer=tf.contrib.layers.xavier_initializer())
+            w_C = tf.get_variable(name='w_C', shape=self.VECTOR_OBS_LEN,
+                                  initializer=tf.contrib.layers.xavier_initializer())
+
+            tf.summary.histogram('w_H', w_H)
+            tf.summary.histogram('w_C', w_C)
 
             normalized_w_C = tf.divide(w_C, self.NUM_AGENTS - 1)
 
@@ -48,9 +60,12 @@ class CommNet:
     def output_layer(self, H):
         with tf.variable_scope("output", reuse=tf.AUTO_REUSE):
             w = tf.get_variable(name='w_out', shape=(self.VECTOR_OBS_LEN, self.OUTPUT_LEN),
-                                initializer=tf.constant_initializer(10))
+                                initializer=tf.contrib.layers.xavier_initializer())
 
-            b = tf.get_variable(name='b_out', shape=self.OUTPUT_LEN, initializer=tf.constant_initializer(100))
+            b = tf.get_variable(name='b_out', shape=self.OUTPUT_LEN, initializer=tf.contrib.layers.xavier_initializer())
+
+            tf.summary.histogram('w_out', w)
+            tf.summary.histogram('b_out', b)
 
             actions = []
             for j in range(self.NUM_AGENTS):
@@ -64,7 +79,7 @@ class CommNet:
                 action = tf.squeeze(self.dist.sample(1))
                 actions.append(action)
 
-            self.actions = tf.stack(actions)
+            self.actions = tf.stack(actions, name="actions")
             return self.actions
 
     def predict(self, observation):
@@ -87,7 +102,7 @@ class CommNet:
             actions = self.ep_actions[i]
             reward = self.ep_rewards[i]
 
-            feed_dict = {self.observation: state, self.target: reward, self.actions: actions}
+            feed_dict = {self.observation: state, self.reward: reward, self.actions: actions}
             _, loss = sess.run([self.train_op, self.loss], feed_dict)
 
         self.ep_observations = []
@@ -99,18 +114,36 @@ if __name__ == '__main__':
     tf.set_random_seed(42)
 
     NUM_AGENTS = 5
-    VECTOR_OBS_LEN = 10
-    OUTPUT_LEN = 2
+    VECTOR_OBS_LEN = 1
+    OUTPUT_LEN = 1
 
     with tf.Session() as sess:
         commNet = CommNet(sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN)
 
         writer = tf.summary.FileWriter("summaries", sess.graph)
-
         sess.run(tf.global_variables_initializer())
 
-        outputs = commNet.predict(np.random.random((NUM_AGENTS, VECTOR_OBS_LEN)))
-        print(outputs.shape)
-        print(outputs)
+        env = GuessingSumEnv(NUM_AGENTS)
+        env.seed(0)
+
+        for episode in range(1000000):
+            observations = env.reset()
+            while True:
+                actions = commNet.predict(observations)
+                _, rewards, done, _ = env.step(np.reshape(actions, (NUM_AGENTS, 1)))
+                reward = -(rewards ** 2).mean()
+                commNet.store_transition(observations, actions, reward)
+
+                if episode % 1000 == 0:
+                    feed_dict = {"observation:0": observations, "reward:0": reward, "output/actions:0": actions}
+
+                    merged_summary = tf.summary.merge_all()
+                    summary = sess.run(merged_summary, feed_dict=feed_dict)
+                    writer.add_summary(summary, episode)
+                    print(reward)
+
+                if done:
+                    commNet.train_step()
+                    break
 
         writer.close()
