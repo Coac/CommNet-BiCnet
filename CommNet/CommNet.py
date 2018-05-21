@@ -24,7 +24,9 @@ class CommNet:
         self.reward = tf.placeholder(1, name="reward")
 
         with tf.name_scope("loss"):
-            self.loss = tf.reduce_mean(self.dist.log_prob(self.actions) * self.reward)
+            alpha = 0.03
+            self.loss = tf.reduce_mean(self.dist.log_prob(self.actions) * (self.reward - self.baseline))
+            self.loss += alpha * tf.square(self.reward - self.baseline)
             tf.summary.scalar('loss', self.loss)
 
         self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
@@ -80,7 +82,11 @@ class CommNet:
                 actions.append(action)
 
             self.actions = tf.stack(actions, name="actions")
-            return self.actions
+
+        with tf.variable_scope("baseline", reuse=tf.AUTO_REUSE):
+            self.baseline = tf.squeeze(tf.layers.dense(tf.reshape(H, (1, self.NUM_AGENTS)), 1, tf.tanh))
+
+        return self.actions
 
     def predict(self, observation):
         return np.array(self.sess.run(self.out, feed_dict={self.observation: observation}))
