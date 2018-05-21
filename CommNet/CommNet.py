@@ -7,7 +7,7 @@ HIDDEN_VECTOR_LEN = 1
 
 
 class CommNet:
-    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.0001):
+    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.00001):
         self.NUM_AGENTS = NUM_AGENTS
         self.VECTOR_OBS_LEN = VECTOR_OBS_LEN
         self.OUTPUT_LEN = OUTPUT_LEN
@@ -15,8 +15,9 @@ class CommNet:
         self.observation = tf.placeholder(tf.float32, (self.NUM_AGENTS, self.VECTOR_OBS_LEN), name="observation")
 
         H0 = self.encoder(self.observation)
-        H1 = self.comm_step("comm_step1", H0)
-        H2 = self.comm_step("comm_step2", H1)
+        C0 = tf.zeros((self.NUM_AGENTS, HIDDEN_VECTOR_LEN), name="C0")
+        H1, C1 = self.comm_step("comm_step1", H0, C0)
+        H2, C2 = self.comm_step("comm_step2", H1, C1)
         self.out = self.output_layer(H2)
 
         self.sess = sess or tf.get_default_session()
@@ -29,7 +30,7 @@ class CommNet:
 
         with tf.name_scope("loss"):
             alpha = 0.1
-            self.loss = tf.reduce_mean(self.dist.log_prob(self.actions) * (self.reward - self.baseline))
+            self.loss = tf.reduce_mean(self.dist.log_prob(self.actions)) * (self.reward - self.baseline)
             self.loss += alpha * tf.square(self.reward - self.baseline)
             tf.summary.scalar('loss', self.loss)
 
@@ -50,7 +51,39 @@ class CommNet:
 
         return H
 
-    def comm_step(self, name, H):
+    def module(self, h, c):
+        with tf.variable_scope("module", reuse=tf.AUTO_REUSE):
+            w_H = tf.get_variable(name='w_H', shape=HIDDEN_VECTOR_LEN,
+                                  initializer=tf.contrib.layers.xavier_initializer())
+            w_C = tf.get_variable(name='w_C', shape=HIDDEN_VECTOR_LEN,
+                                  initializer=tf.contrib.layers.xavier_initializer())
+
+            return tf.tanh(tf.multiply(w_H, h) + tf.multiply(w_C, c))
+
+    def comm_step(self, name, H, C):
+        with tf.variable_scope(name):
+            next_H = []
+            for j in range(self.NUM_AGENTS):
+                h = H[j]
+                c = C[j]
+                next_h = self.module(h, c)
+                next_H.append(next_h)
+
+            next_H = tf.stack(next_H)
+            next_H = tf.identity(next_H, "H")
+
+            next_C = []
+            for j1 in range(self.NUM_AGENTS):
+                next_c = []
+                for j2 in range(self.NUM_AGENTS):
+                    if j1 != j2:
+                        next_c.append(next_H[j2])
+                next_c = tf.reduce_mean(tf.stack(next_c), 0)
+                next_C.append(next_c)
+
+            return next_H, tf.identity(next_C, "C")
+
+    def comm_step_old(self, name, H):
         with tf.variable_scope(name):
             w_H = tf.get_variable(name='w_H', shape=HIDDEN_VECTOR_LEN,
                                   initializer=tf.contrib.layers.xavier_initializer())
