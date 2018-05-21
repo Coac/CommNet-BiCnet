@@ -3,6 +3,8 @@ import tensorflow as tf
 from guessing_sum_env import *
 from utils import *
 
+HIDDEN_VECTOR_LEN = 1
+
 
 class CommNet:
     def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.0001):
@@ -11,7 +13,9 @@ class CommNet:
         self.OUTPUT_LEN = OUTPUT_LEN
 
         self.observation = tf.placeholder(tf.float32, (self.NUM_AGENTS, self.VECTOR_OBS_LEN), name="observation")
-        H1 = self.comm_step("comm_step1", self.observation)
+
+        H0 = self.encoder(self.observation)
+        H1 = self.comm_step("comm_step1", H0)
         H2 = self.comm_step("comm_step2", H1)
         self.out = self.output_layer(H2)
 
@@ -24,7 +28,7 @@ class CommNet:
         self.reward = tf.placeholder(1, name="reward")
 
         with tf.name_scope("loss"):
-            alpha = 0.03
+            alpha = 0.1
             self.loss = tf.reduce_mean(self.dist.log_prob(self.actions) * (self.reward - self.baseline))
             self.loss += alpha * tf.square(self.reward - self.baseline)
             tf.summary.scalar('loss', self.loss)
@@ -34,11 +38,23 @@ class CommNet:
         with tf.name_scope("train"):
             self.train_op = self.optimizer.minimize(self.loss)
 
+    def encoder(self, s):
+        H = []
+
+        with tf.variable_scope("encoder", reuse=tf.AUTO_REUSE):
+            for j in range(self.NUM_AGENTS):
+                encoded = tf.layers.dense(tf.reshape(s[j], (1, self.VECTOR_OBS_LEN)), HIDDEN_VECTOR_LEN, name="dense")
+                H.append(tf.squeeze(encoded))
+            H = tf.stack(H)
+            H = tf.reshape(H, (self.NUM_AGENTS, HIDDEN_VECTOR_LEN))
+
+        return H
+
     def comm_step(self, name, H):
         with tf.variable_scope(name):
-            w_H = tf.get_variable(name='w_H', shape=self.VECTOR_OBS_LEN,
+            w_H = tf.get_variable(name='w_H', shape=HIDDEN_VECTOR_LEN,
                                   initializer=tf.contrib.layers.xavier_initializer())
-            w_C = tf.get_variable(name='w_C', shape=self.VECTOR_OBS_LEN,
+            w_C = tf.get_variable(name='w_C', shape=HIDDEN_VECTOR_LEN,
                                   initializer=tf.contrib.layers.xavier_initializer())
 
             tf.summary.histogram('w_H', w_H)
@@ -47,11 +63,11 @@ class CommNet:
             normalized_w_C = tf.divide(w_C, self.NUM_AGENTS - 1)
 
             w_C_matrix = tf.reshape(tf.tile(normalized_w_C, [self.NUM_AGENTS]),
-                                    (1, self.NUM_AGENTS * self.VECTOR_OBS_LEN))
+                                    (1, self.NUM_AGENTS * HIDDEN_VECTOR_LEN))
             w_C_matrix = tf.tile(w_C_matrix, [self.NUM_AGENTS, 1])
 
             w_H_minus_w_C_matrix = block_diagonal(
-                [tf.reshape(tf.subtract(w_H, normalized_w_C), (1, self.VECTOR_OBS_LEN)) for j in
+                [tf.reshape(tf.subtract(w_H, normalized_w_C), (1, HIDDEN_VECTOR_LEN)) for j in
                  range(self.NUM_AGENTS)])
             T = tf.add(w_C_matrix, w_H_minus_w_C_matrix)
 
@@ -61,7 +77,7 @@ class CommNet:
 
     def output_layer(self, H):
         with tf.variable_scope("output", reuse=tf.AUTO_REUSE):
-            w = tf.get_variable(name='w_out', shape=(self.VECTOR_OBS_LEN, self.OUTPUT_LEN),
+            w = tf.get_variable(name='w_out', shape=(HIDDEN_VECTOR_LEN, self.OUTPUT_LEN),
                                 initializer=tf.contrib.layers.xavier_initializer())
 
             b = tf.get_variable(name='b_out', shape=self.OUTPUT_LEN, initializer=tf.contrib.layers.xavier_initializer())
@@ -71,7 +87,7 @@ class CommNet:
 
             actions = []
             for j in range(self.NUM_AGENTS):
-                h = tf.slice(H, [j, 0], [1, self.VECTOR_OBS_LEN])
+                h = tf.slice(H, [j, 0], [1, HIDDEN_VECTOR_LEN])
 
                 means = tf.matmul(h, w) + b
                 stds = [1.0 for i in range(self.OUTPUT_LEN)]
@@ -84,7 +100,7 @@ class CommNet:
             self.actions = tf.stack(actions, name="actions")
 
         with tf.variable_scope("baseline", reuse=tf.AUTO_REUSE):
-            self.baseline = tf.squeeze(tf.layers.dense(tf.reshape(H, (1, self.NUM_AGENTS)), 1, tf.tanh))
+            self.baseline = tf.squeeze(tf.layers.dense(tf.reshape(H, (1, self.NUM_AGENTS * HIDDEN_VECTOR_LEN)), 1))
 
         return self.actions
 
