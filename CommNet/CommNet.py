@@ -8,7 +8,7 @@ HIDDEN_VECTOR_LEN = 1
 
 
 class CommNet:
-    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.001):
+    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.0001):
         self.NUM_AGENTS = NUM_AGENTS
         self.VECTOR_OBS_LEN = VECTOR_OBS_LEN
         self.OUTPUT_LEN = OUTPUT_LEN
@@ -46,10 +46,13 @@ class CommNet:
             tf.summary.scalar('reward', self.reward)
             tf.summary.scalar('baseline', self.baseline)
 
-        self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
-
         with tf.name_scope("train"):
-            self.train_op = self.optimizer.minimize(self.total_loss)
+            self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+            gradients = self.optimizer.compute_gradients(self.total_loss)
+            clipped_gradients = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients]
+            self.train_op = self.optimizer.apply_gradients(clipped_gradients)
+
+            # self.train_op = tf.gradients(self.total_loss, tf.trainable_variables()[:len(tf.trainable_variables()) -2])
 
     def encoder(self, s):
         H = []
@@ -100,23 +103,31 @@ class CommNet:
 
     def output_layer(self, H):
         with tf.variable_scope("output", reuse=tf.AUTO_REUSE):
-            w = tf.get_variable(name='w_out', shape=(HIDDEN_VECTOR_LEN, self.OUTPUT_LEN),
+            w_means = tf.get_variable(name='w_means_out', shape=(HIDDEN_VECTOR_LEN, self.OUTPUT_LEN),
                                 initializer=tf.contrib.layers.xavier_initializer())
+            b_means = tf.get_variable(name='b_means_out', shape=self.OUTPUT_LEN, initializer=tf.zeros_initializer())
 
-            b = tf.get_variable(name='b_out', shape=self.OUTPUT_LEN, initializer=tf.contrib.layers.xavier_initializer())
+            w_stds = tf.get_variable(name='w_stds_out', shape=(HIDDEN_VECTOR_LEN, self.OUTPUT_LEN),
+                                initializer=tf.contrib.layers.xavier_initializer())
+            b_stds = tf.get_variable(name='b_stds_out', shape=self.OUTPUT_LEN)
 
-            tf.summary.histogram('w_out', w)
-            tf.summary.histogram('b_out', b)
+            tf.summary.histogram('w_means_out', w_means)
+            tf.summary.histogram('b_means_out', w_stds)
+            tf.summary.histogram('w_stds', w_stds)
+            tf.summary.histogram('b_stds', b_stds)
 
             actions = []
             self.normal_dists = []
             for j in range(self.NUM_AGENTS):
                 h = tf.slice(H, [j, 0], [1, HIDDEN_VECTOR_LEN])
 
-                means = tf.matmul(h, w) + b
-                stds = [0.00001 for i in range(self.OUTPUT_LEN)]
+                means = tf.matmul(h, w_means) + b_means
+                means = tf.identity(means, name="means")
 
-                normal_dist = tf.distributions.Normal(means, stds)
+                stds = tf.matmul(h, w_stds) + b_stds
+                stds = tf.identity(stds, name="stds")
+
+                normal_dist = tf.distributions.Normal(loc=means, scale=stds)
                 self.normal_dists.append(normal_dist)
 
                 action = tf.squeeze(normal_dist.sample(1))
@@ -125,7 +136,8 @@ class CommNet:
             self.actions = tf.stack(actions, name="actions")
 
         with tf.variable_scope("baseline", reuse=tf.AUTO_REUSE):
-            self.baseline = tf.squeeze(tf.layers.dense(tf.reshape(H, (1, self.NUM_AGENTS * HIDDEN_VECTOR_LEN)), 1))
+            self.baseline = tf.layers.dense(tf.reshape(H, (1, self.NUM_AGENTS * HIDDEN_VECTOR_LEN)), units=1, kernel_initializer=tf.contrib.layers.xavier_initializer())
+            self.baseline = tf.squeeze(self.baseline)
 
             tf.summary.histogram("w_baseline", tf.get_variable("dense/kernel"))
 
@@ -191,7 +203,7 @@ if __name__ == '__main__':
                     merged_summary = tf.summary.merge_all()
                     summary = sess.run(merged_summary, feed_dict=feed_dict)
                     writer.add_summary(summary, episode)
-                    print(reward)
+                    print("reward: ", reward, " | actions: ", actions, " | expected_output:", np.sum(observations))
 
                 if done:
                     commNet.train_step()
