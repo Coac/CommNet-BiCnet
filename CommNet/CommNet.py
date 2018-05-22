@@ -172,7 +172,9 @@ if __name__ == '__main__':
     VECTOR_OBS_LEN = 1
     OUTPUT_LEN = 1
 
-    with tf.Session() as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:
         commNet = CommNet(sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN)
 
         writer = tf.summary.FileWriter("summaries", sess.graph)
