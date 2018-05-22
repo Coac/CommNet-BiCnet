@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 from guessing_sum_env import *
 from utils import *
+from datetime import datetime
 
 HIDDEN_VECTOR_LEN = 1
 
@@ -177,7 +178,7 @@ if __name__ == '__main__':
     with tf.Session(config=config) as sess:
         commNet = CommNet(sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN)
 
-        writer = tf.summary.FileWriter("summaries", sess.graph)
+        writer = tf.summary.FileWriter("summaries/" + datetime.now().strftime('%d-%m-%y %H%M'), sess.graph)
         sess.run(tf.global_variables_initializer())
 
         env = GuessingSumEnv(NUM_AGENTS)
