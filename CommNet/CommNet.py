@@ -8,7 +8,7 @@ HIDDEN_VECTOR_LEN = 1
 
 
 class CommNet:
-    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.00001):
+    def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.001):
         self.NUM_AGENTS = NUM_AGENTS
         self.VECTOR_OBS_LEN = VECTOR_OBS_LEN
         self.OUTPUT_LEN = OUTPUT_LEN
@@ -27,12 +27,17 @@ class CommNet:
         self.ep_actions = []
         self.ep_rewards = []
 
-        self.reward = tf.placeholder(1, name="reward")
+        self.reward = tf.placeholder(tf.float32, shape=(), name="reward")
 
         with tf.name_scope("loss"):
-            alpha = 0.1
-            self.loss = tf.reduce_mean(self.dist.log_prob(self.actions)) * (self.reward - self.baseline)
+            alpha = 1
+            self.loss = 0
+            for j in range(self.NUM_AGENTS):
+                normal_dist = self.normal_dists[j]
+                actions = tf.reshape(self.actions, (self.NUM_AGENTS, self.OUTPUT_LEN))
+                self.loss -= tf.squeeze(tf.reduce_mean(normal_dist.log_prob(actions[j])) * (self.reward - self.baseline))
             self.loss += alpha * tf.square(self.reward - self.baseline)
+
             tf.summary.scalar('loss', self.loss)
 
         self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
@@ -120,15 +125,17 @@ class CommNet:
             tf.summary.histogram('b_out', b)
 
             actions = []
+            self.normal_dists = []
             for j in range(self.NUM_AGENTS):
                 h = tf.slice(H, [j, 0], [1, HIDDEN_VECTOR_LEN])
 
                 means = tf.matmul(h, w) + b
-                stds = [1.0 for i in range(self.OUTPUT_LEN)]
+                stds = [0.00001 for i in range(self.OUTPUT_LEN)]
 
-                self.dist = tf.distributions.Normal(means, stds)
+                normal_dist = tf.distributions.Normal(means, stds)
+                self.normal_dists.append(normal_dist)
 
-                action = tf.squeeze(self.dist.sample(1))
+                action = tf.squeeze(normal_dist.sample(1))
                 actions.append(action)
 
             self.actions = tf.stack(actions, name="actions")
