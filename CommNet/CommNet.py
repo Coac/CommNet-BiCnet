@@ -1,8 +1,9 @@
+from datetime import datetime
+
 import numpy as np
 import tensorflow as tf
 from guessing_sum_env import *
 from utils import *
-from datetime import datetime
 
 HIDDEN_VECTOR_LEN = 1
 
@@ -19,7 +20,9 @@ class CommNet:
         C0 = tf.zeros((self.NUM_AGENTS, HIDDEN_VECTOR_LEN), name="C0")
         H1, C1 = self.comm_step("comm_step1", H0, C0)
         H2, C2 = self.comm_step("comm_step2", H1, C1)
-        self.out = self.output_layer(H2)
+        H3, _ = self.comm_step("comm_step3", H2, C2)
+
+        self.out = self.output_layer(H3)
 
         self.sess = sess or tf.get_default_session()
 
@@ -32,10 +35,14 @@ class CommNet:
         with tf.name_scope("loss"):
             alpha = 1
             self.policy_loss = 0
+            actions = tf.reshape(self.actions, (self.NUM_AGENTS, self.OUTPUT_LEN))
             for j in range(self.NUM_AGENTS):
                 normal_dist = self.normal_dists[j]
-                actions = tf.reshape(self.actions, (self.NUM_AGENTS, self.OUTPUT_LEN))
-                self.policy_loss -= tf.squeeze(tf.reduce_mean(normal_dist.log_prob(actions[j])) * (self.reward - self.baseline))
+
+                log_prob = normal_dist.log_prob(actions[j])
+
+                log_prob = tf.where(tf.is_nan(log_prob), tf.zeros_like(log_prob), log_prob)
+                self.policy_loss -= tf.squeeze(tf.reduce_mean(log_prob)) * (self.reward - self.baseline)
 
             self.baseline_loss = alpha * tf.square(self.reward - self.baseline)
             self.total_loss = self.policy_loss + self.baseline_loss
@@ -104,11 +111,11 @@ class CommNet:
     def output_layer(self, H):
         with tf.variable_scope("output", reuse=tf.AUTO_REUSE):
             w_means = tf.get_variable(name='w_means_out', shape=(HIDDEN_VECTOR_LEN, self.OUTPUT_LEN),
-                                initializer=tf.contrib.layers.xavier_initializer())
+                                      initializer=tf.contrib.layers.xavier_initializer())
             b_means = tf.get_variable(name='b_means_out', shape=self.OUTPUT_LEN, initializer=tf.zeros_initializer())
 
             w_stds = tf.get_variable(name='w_stds_out', shape=(HIDDEN_VECTOR_LEN, self.OUTPUT_LEN),
-                                initializer=tf.contrib.layers.xavier_initializer())
+                                     initializer=tf.contrib.layers.xavier_initializer())
             b_stds = tf.get_variable(name='b_stds_out', shape=self.OUTPUT_LEN)
 
             tf.summary.histogram('w_means_out', w_means)
@@ -125,18 +132,21 @@ class CommNet:
                 means = tf.identity(means, name="means")
 
                 stds = tf.matmul(h, w_stds) + b_stds
+                stds = tf.nn.softplus(stds) + 1e-5
                 stds = tf.identity(stds, name="stds")
 
                 normal_dist = tf.distributions.Normal(loc=means, scale=stds)
                 self.normal_dists.append(normal_dist)
 
                 action = tf.squeeze(normal_dist.sample(1))
+
                 actions.append(action)
 
             self.actions = tf.stack(actions, name="actions")
 
         with tf.variable_scope("baseline", reuse=tf.AUTO_REUSE):
-            self.baseline = tf.layers.dense(tf.reshape(H, (1, self.NUM_AGENTS * HIDDEN_VECTOR_LEN)), units=1, kernel_initializer=tf.contrib.layers.xavier_initializer())
+            self.baseline = tf.layers.dense(tf.reshape(H, (1, self.NUM_AGENTS * HIDDEN_VECTOR_LEN)), units=1,
+                                            kernel_initializer=tf.contrib.layers.xavier_initializer())
             self.baseline = tf.squeeze(self.baseline)
 
             tf.summary.histogram("w_baseline", tf.get_variable("dense/kernel"))
