@@ -31,19 +31,25 @@ class CommNet:
 
         with tf.name_scope("loss"):
             alpha = 1
-            self.loss = 0
+            self.policy_loss = 0
             for j in range(self.NUM_AGENTS):
                 normal_dist = self.normal_dists[j]
                 actions = tf.reshape(self.actions, (self.NUM_AGENTS, self.OUTPUT_LEN))
-                self.loss -= tf.squeeze(tf.reduce_mean(normal_dist.log_prob(actions[j])) * (self.reward - self.baseline))
-            self.loss += alpha * tf.square(self.reward - self.baseline)
+                self.policy_loss -= tf.squeeze(tf.reduce_mean(normal_dist.log_prob(actions[j])) * (self.reward - self.baseline))
 
-            tf.summary.scalar('loss', self.loss)
+            self.baseline_loss = alpha * tf.square(self.reward - self.baseline)
+            self.total_loss = self.policy_loss + self.baseline_loss
+
+            tf.summary.scalar('baseline_loss', self.baseline_loss)
+            tf.summary.scalar('policy_loss', self.policy_loss)
+            tf.summary.scalar('total_loss', self.total_loss)
+            tf.summary.scalar('reward', self.reward)
+            tf.summary.scalar('baseline', self.baseline)
 
         self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 
         with tf.name_scope("train"):
-            self.train_op = self.optimizer.minimize(self.loss)
+            self.train_op = self.optimizer.minimize(self.total_loss)
 
     def encoder(self, s):
         H = []
@@ -63,6 +69,9 @@ class CommNet:
                                   initializer=tf.contrib.layers.xavier_initializer())
             w_C = tf.get_variable(name='w_C', shape=HIDDEN_VECTOR_LEN,
                                   initializer=tf.contrib.layers.xavier_initializer())
+
+            tf.summary.histogram('w_H', w_H)
+            tf.summary.histogram('w_C', w_C)
 
             return tf.tanh(tf.multiply(w_H, h) + tf.multiply(w_C, c))
 
@@ -88,31 +97,6 @@ class CommNet:
                 next_C.append(next_c)
 
             return next_H, tf.identity(next_C, "C")
-
-    def comm_step_old(self, name, H):
-        with tf.variable_scope(name):
-            w_H = tf.get_variable(name='w_H', shape=HIDDEN_VECTOR_LEN,
-                                  initializer=tf.contrib.layers.xavier_initializer())
-            w_C = tf.get_variable(name='w_C', shape=HIDDEN_VECTOR_LEN,
-                                  initializer=tf.contrib.layers.xavier_initializer())
-
-            tf.summary.histogram('w_H', w_H)
-            tf.summary.histogram('w_C', w_C)
-
-            normalized_w_C = tf.divide(w_C, self.NUM_AGENTS - 1)
-
-            w_C_matrix = tf.reshape(tf.tile(normalized_w_C, [self.NUM_AGENTS]),
-                                    (1, self.NUM_AGENTS * HIDDEN_VECTOR_LEN))
-            w_C_matrix = tf.tile(w_C_matrix, [self.NUM_AGENTS, 1])
-
-            w_H_minus_w_C_matrix = block_diagonal(
-                [tf.reshape(tf.subtract(w_H, normalized_w_C), (1, HIDDEN_VECTOR_LEN)) for j in
-                 range(self.NUM_AGENTS)])
-            T = tf.add(w_C_matrix, w_H_minus_w_C_matrix)
-
-            H_repeated = tf.tile(H, [1, self.NUM_AGENTS])
-
-            return tf.tanh(tf.reshape(tf.reduce_sum(H_repeated * T, axis=0), H.shape))
 
     def output_layer(self, H):
         with tf.variable_scope("output", reuse=tf.AUTO_REUSE):
@@ -143,6 +127,8 @@ class CommNet:
         with tf.variable_scope("baseline", reuse=tf.AUTO_REUSE):
             self.baseline = tf.squeeze(tf.layers.dense(tf.reshape(H, (1, self.NUM_AGENTS * HIDDEN_VECTOR_LEN)), 1))
 
+            tf.summary.histogram("w_baseline", tf.get_variable("dense/kernel"))
+
         return self.actions
 
     def predict(self, observation):
@@ -166,7 +152,7 @@ class CommNet:
             reward = self.ep_rewards[i]
 
             feed_dict = {self.observation: state, self.reward: reward, self.actions: actions}
-            _, loss = sess.run([self.train_op, self.loss], feed_dict)
+            sess.run([self.train_op], feed_dict)
 
         self.ep_observations = []
         self.ep_actions = []
