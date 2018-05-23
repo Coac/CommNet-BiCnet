@@ -20,7 +20,7 @@ class CommNet:
         C0 = tf.zeros((self.NUM_AGENTS, HIDDEN_VECTOR_LEN), name="C0")
         H1, C1 = self.comm_step("comm_step1", H0, C0)
         H2, C2 = self.comm_step("comm_step2", H1, C1)
-        H3, _ = self.comm_step("comm_step3", H2, C2)
+        H3, _ = self.comm_step("comm_step3", H2, C2, H0)
 
         self.out = self.output_layer(H3)
 
@@ -38,10 +38,7 @@ class CommNet:
             actions = tf.reshape(self.actions, (self.NUM_AGENTS, self.OUTPUT_LEN))
             for j in range(self.NUM_AGENTS):
                 normal_dist = self.normal_dists[j]
-
                 log_prob = normal_dist.log_prob(actions[j])
-
-                log_prob = tf.where(tf.is_nan(log_prob), tf.zeros_like(log_prob), log_prob)
                 self.policy_loss -= tf.squeeze(tf.reduce_mean(log_prob)) * (self.reward - self.baseline)
 
             self.baseline_loss = alpha * tf.square(self.reward - self.baseline)
@@ -85,7 +82,7 @@ class CommNet:
 
             return tf.tanh(tf.multiply(w_H, h) + tf.multiply(w_C, c))
 
-    def comm_step(self, name, H, C):
+    def comm_step(self, name, H, C, H0_skip_con=None):
         with tf.variable_scope(name):
             next_H = []
             for j in range(self.NUM_AGENTS):
@@ -96,6 +93,9 @@ class CommNet:
 
             next_H = tf.stack(next_H)
             next_H = tf.identity(next_H, "H")
+
+            if H0_skip_con is not None:
+                next_H = tf.add(next_H, H0_skip_con)
 
             next_C = []
             for j1 in range(self.NUM_AGENTS):
