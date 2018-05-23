@@ -10,28 +10,33 @@ HIDDEN_VECTOR_LEN = 1
 
 class CommNet:
     def __init__(self, sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN, learning_rate=0.0001):
+        self.sess = sess or tf.get_default_session()
         self.NUM_AGENTS = NUM_AGENTS
         self.VECTOR_OBS_LEN = VECTOR_OBS_LEN
         self.OUTPUT_LEN = OUTPUT_LEN
 
         self.observation = tf.placeholder(tf.float32, (self.NUM_AGENTS, self.VECTOR_OBS_LEN), name="observation")
+        self.reward = tf.placeholder(tf.float32, shape=(), name="reward")
 
-        H0 = self.encoder(self.observation)
-        C0 = tf.zeros((self.NUM_AGENTS, HIDDEN_VECTOR_LEN), name="C0")
-        H1, C1 = self.comm_step("comm_step1", H0, C0)
-        H2, C2 = self.comm_step("comm_step2", H1, C1)
-        H3, _ = self.comm_step("comm_step3", H2, C2, H0)
-
-        self.out = self.output_layer(H3)
-
-        self.sess = sess or tf.get_default_session()
+        self.out = self._build_network(self.observation)
 
         self.ep_observations = []
         self.ep_actions = []
         self.ep_rewards = []
 
-        self.reward = tf.placeholder(tf.float32, shape=(), name="reward")
+        self._loss()
+        self._train_op(learning_rate)
 
+
+    def _build_network(self, observation):
+        H0 = self.encoder(observation)
+        C0 = tf.zeros((self.NUM_AGENTS, HIDDEN_VECTOR_LEN), name="C0")
+        H1, C1 = self.comm_step("comm_step1", H0, C0)
+        H2, C2 = self.comm_step("comm_step2", H1, C1)
+        H3, _ = self.comm_step("comm_step3", H2, C2, H0)
+        return self.output_layer(H3)
+
+    def _loss(self):
         with tf.name_scope("loss"):
             alpha = 1
             self.policy_loss = 0
@@ -50,13 +55,12 @@ class CommNet:
             tf.summary.scalar('reward', self.reward)
             tf.summary.scalar('baseline', self.baseline)
 
+    def _train_op(self, learning_rate):
         with tf.name_scope("train"):
             self.optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
             gradients = self.optimizer.compute_gradients(self.total_loss)
             clipped_gradients = [(tf.clip_by_value(grad, -1., 1.), var) for grad, var in gradients]
             self.train_op = self.optimizer.apply_gradients(clipped_gradients)
-
-            # self.train_op = tf.gradients(self.total_loss, tf.trainable_variables()[:len(tf.trainable_variables()) -2])
 
     def encoder(self, s):
         H = []
