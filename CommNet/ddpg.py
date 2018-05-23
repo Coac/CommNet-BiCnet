@@ -11,7 +11,7 @@ import tensorflow as tf
 from guessing_sum_env import *
 from replay_buffer import ReplayBuffer
 
-from CommNet import CommNet
+from CommNet import comm_net
 
 HIDDEN_VECTOR_LEN = 1
 NUM_AGENTS = 5
@@ -78,7 +78,7 @@ class ActorNetwork(object):
 
     def create_actor_network(self, name):
         inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN))
-        out = CommNet.actor_build_network(name, inputs)
+        out = comm_net.actor_build_network(name, inputs)
         return inputs, out
 
     def train(self, inputs, a_gradient):
@@ -155,7 +155,7 @@ class CriticNetwork(object):
         inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN))
         action = tf.placeholder(tf.float32, shape=(NUM_AGENTS, OUTPUT_LEN))
 
-        out = CommNet.critic_build_network(name, inputs, action)
+        out = comm_net.critic_build_network(name, inputs, action)
         return inputs, action, out
 
     def train(self, inputs, action, predicted_q_value):
