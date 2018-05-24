@@ -13,7 +13,8 @@ OUTPUT_LEN = 1
 class CommNet:
     @staticmethod
     def base_build_network(observation):
-        H0 = CommNet.encoder(observation)
+        # H0 = CommNet.encoder(observation)
+        H0 = tf.reshape(observation, (NUM_AGENTS, HIDDEN_VECTOR_LEN))
         C0 = tf.zeros((NUM_AGENTS, HIDDEN_VECTOR_LEN), name="C0")
         H1, C1 = CommNet.comm_step("comm_step1", H0, C0)
         H2, _ = CommNet.comm_step("comm_step2", H1, C1, H0)
@@ -24,7 +25,7 @@ class CommNet:
     def actor_build_network(name, observation):
         with tf.variable_scope(name):
             H = CommNet.base_build_network(observation)
-
+            return H
             return CommNet.actor_output_layer(H)
 
     @staticmethod

@@ -52,24 +52,26 @@ class ActorNetwork(object):
 
         # Op for periodically updating target network with online network
         # weights
-        self.update_target_network_params = \
-            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) +
-                                                  tf.multiply(self.target_network_params[i], 1. - self.tau))
-             for i in range(len(self.target_network_params))]
+        with tf.name_scope("actor_update_target_network_params"):
+            self.update_target_network_params = \
+                [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) +
+                                                      tf.multiply(self.target_network_params[i], 1. - self.tau))
+                 for i in range(len(self.target_network_params))]
 
         # This gradient will be provided by the critic network
-        self.action_gradient = tf.placeholder(tf.float32, self.a_dim)
+        self.action_gradient = tf.placeholder(tf.float32, self.a_dim, name="action_gradient")
 
         self.out = tf.reshape(self.out, self.action_gradient.shape)
 
         # Combine the gradients here
-        self.unnormalized_actor_gradients = tf.gradients(
-            self.out, self.network_params, -self.action_gradient)
-        self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.unnormalized_actor_gradients))
+        with tf.name_scope("actor_gradients"):
+            self.unnormalized_actor_gradients = tf.gradients(
+                self.out, self.network_params, -self.action_gradient)
+            self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.unnormalized_actor_gradients))
 
         # Optimization Op
-        self.optimize = tf.train.AdamOptimizer(self.learning_rate). \
-            apply_gradients(zip(self.actor_gradients, self.network_params))
+        self.optimize = tf.train.AdamOptimizer(self.learning_rate)
+        self.optimize = self.optimize.apply_gradients(zip(self.actor_gradients, self.network_params))
 
         self.num_trainable_vars = len(
             self.network_params) + len(self.target_network_params)
@@ -129,16 +131,20 @@ class CriticNetwork(object):
 
         # Op for periodically updating target network with online network
         # weights with regularization
-        self.update_target_network_params = \
-            [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau) \
-                                                  + tf.multiply(self.target_network_params[i], 1. - self.tau))
-             for i in range(len(self.target_network_params))]
+        with tf.name_scope("critic_update_target_network_params"):
+            self.update_target_network_params = \
+                [self.target_network_params[i].assign(tf.multiply(self.network_params[i], self.tau)
+                                                      + tf.multiply(self.target_network_params[i], 1. - self.tau))
+                 for i in range(len(self.target_network_params))]
 
         # Network target (y_i)
-        self.predicted_q_value = tf.placeholder(tf.float32, ())
+        self.predicted_q_value = tf.placeholder(tf.float32, (), name="predicted_q_value")
 
         # Define loss and optimization Op
         self.loss = tf.losses.mean_squared_error(self.predicted_q_value, self.out)
+        # tf.summary.scalar("critic_loss", self.loss)
+        self.loss = tf.Print(self.loss, [self.loss])
+
         self.optimize = tf.train.AdamOptimizer(
             self.learning_rate).minimize(self.loss)
 
@@ -147,7 +153,7 @@ class CriticNetwork(object):
         # this will sum up the gradients of each critic output in the minibatch
         # w.r.t. that action. Each output is independent of all
         # actions except for one.
-        self.action_grads = tf.gradients(self.out, self.action)
+        self.action_grads = tf.gradients(self.out, self.action, name="action_grads")
 
     def create_critic_network(self, name):
         inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN), name="critic_inputs")
@@ -190,9 +196,9 @@ class CriticNetwork(object):
 # ===========================
 
 def build_summaries():
-    episode_reward = tf.Variable(0.)
+    episode_reward = tf.Variable(0.,name="episode_reward")
     tf.summary.scalar("Reward", episode_reward)
-    episode_ave_max_q = tf.Variable(0.)
+    episode_ave_max_q = tf.Variable(0., name="episode_ave_max_q")
     tf.summary.scalar("Qmax Value", episode_ave_max_q)
 
     summary_vars = [episode_reward, episode_ave_max_q]
@@ -270,16 +276,20 @@ def train(sess, env, args, actor, critic):
             ep_reward += reward
 
             if done:
-                summary_str = sess.run(summary_ops, feed_dict={
-                    summary_vars[0]: ep_reward,
-                    summary_vars[1]: ep_ave_max_q / float(j + 1)
-                })
 
-                writer.add_summary(summary_str, i)
-                writer.flush()
+                if i % 1000 == 0:
+                    summary_str = sess.run(summary_ops, feed_dict={
+                        summary_vars[0]: ep_reward,
+                        summary_vars[1]: ep_ave_max_q / float(j + 1),
+                        # "critic_network/critic_action": 1,
+                        # "predicted_q_value": 1,
+                    })
 
-                print('| Reward: {:.4f} | Episode: {:d} | Qmax: {:.4f}'.format(ep_reward,
-                                                                               i, (ep_ave_max_q / float(j + 1))))
+                    writer.add_summary(summary_str, i)
+                    writer.flush()
+
+                    print('| Reward: {:.4f} | Episode: {:d} | Qmax: {:.4f}'.format(ep_reward,
+                                                                                   i, (ep_ave_max_q / float(j + 1))))
                 break
 
 
@@ -323,7 +333,6 @@ if __name__ == '__main__':
     parser.add_argument('--minibatch-size', help='size of minibatch for minibatch-SGD', default=1)
 
     # run parameters
-    parser.add_argument('--env', help='choose the gym env- tested on {Pendulum-v0}', default='Pendulum-v0')
     parser.add_argument('--random-seed', help='random seed for repeatability', default=1234)
     parser.add_argument('--max-episodes', help='max num of episodes to do while training', default=50000)
     parser.add_argument('--max-episode-len', help='max length of 1 episode', default=1000)
