@@ -1,5 +1,3 @@
-from datetime import datetime
-
 import numpy as np
 import tensorflow as tf
 from guessing_sum_env import *
@@ -131,35 +129,18 @@ class CommNet:
 if __name__ == '__main__':
     tf.set_random_seed(42)
 
+    tf.reset_default_graph()
+
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
-        commNet = CommNet(sess, NUM_AGENTS, VECTOR_OBS_LEN, OUTPUT_LEN)
+        shape = (NUM_AGENTS, VECTOR_OBS_LEN)
+        observation = tf.placeholder(tf.float32, shape=shape)
 
-        writer = tf.summary.FileWriter("summaries/" + datetime.now().strftime('%d-%m-%y %H%M'), sess.graph)
+        out = CommNet.actor_build_network("actor_network", observation)
+
         sess.run(tf.global_variables_initializer())
 
-        env = GuessingSumEnv(NUM_AGENTS)
-        env.seed(0)
+        feed_dict = {observation: np.random.random_sample(shape)}
 
-        for episode in range(1000000):
-            observations = env.reset()
-            while True:
-                actions = commNet.predict(observations)
-                _, rewards, done, _ = env.step(np.reshape(actions, (NUM_AGENTS, 1)))
-                reward = -(rewards ** 2).mean()
-                commNet.store_transition(observations, actions, reward)
-
-                if episode % 1000 == 0:
-                    feed_dict = {"observation:0": observations, "reward:0": reward, "output/actions:0": actions}
-
-                    merged_summary = tf.summary.merge_all()
-                    summary = sess.run(merged_summary, feed_dict=feed_dict)
-                    writer.add_summary(summary, episode)
-                    print("reward: ", reward, " | actions: ", actions, " | expected_output:", np.sum(observations))
-
-                if done:
-                    commNet.train_step()
-                    break
-
-        writer.close()
+        print(sess.run(out, feed_dict=feed_dict))
