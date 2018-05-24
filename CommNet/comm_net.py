@@ -85,7 +85,7 @@ class CommNet:
                     if j1 != j2:
                         next_c.append(next_H[j2])
                 next_c = tf.reduce_mean(tf.stack(next_c), 0)
-                next_c = tf.where(tf.is_nan(next_c), 0., next_c)
+                next_c = tf.where(tf.is_nan(next_c), tf.zeros_like(next_c), next_c)
 
                 next_C.append(next_c)
 
