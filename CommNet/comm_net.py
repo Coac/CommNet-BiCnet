@@ -54,6 +54,8 @@ class CommNet:
             w_C = tf.get_variable(name='w_C', shape=HIDDEN_VECTOR_LEN,
                                   initializer=tf.contrib.layers.xavier_initializer())
 
+            # w_H = tf.Print(w_H, [w_H], message=tf.get_default_graph().get_name_scope() + "w_H")
+
             tf.summary.histogram('w_H', w_H)
             tf.summary.histogram('w_C', w_C)
 

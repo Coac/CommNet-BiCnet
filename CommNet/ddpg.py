@@ -61,13 +61,17 @@ class ActorNetwork(object):
         # This gradient will be provided by the critic network
         self.action_gradient = tf.placeholder(tf.float32, self.a_dim, name="action_gradient")
 
-        self.out = tf.reshape(self.out, self.action_gradient.shape)
+        # self.out = tf.reshape(self.out, self.action_gradient.shape)
 
         # Combine the gradients here
         with tf.name_scope("actor_gradients"):
-            self.unnormalized_actor_gradients = tf.gradients(
-                self.out, self.network_params, -self.action_gradient)
+            self.unnormalized_actor_gradients = tf.gradients(self.out, self.network_params, -self.action_gradient)
             self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.unnormalized_actor_gradients))
+
+            # for i in range(len(self.actor_gradients)):
+            #     self.actor_gradients[i] = tf.Print(self.actor_gradients[i], [self.actor_gradients[i]], message=str(self.network_params[i]))
+
+
 
         # Optimization Op
         self.optimize = tf.train.AdamOptimizer(self.learning_rate)
@@ -142,8 +146,6 @@ class CriticNetwork(object):
 
         # Define loss and optimization Op
         self.loss = tf.losses.mean_squared_error(self.predicted_q_value, self.out)
-        # tf.summary.scalar("critic_loss", self.loss)
-        self.loss = tf.Print(self.loss, [self.loss])
 
         self.optimize = tf.train.AdamOptimizer(
             self.learning_rate).minimize(self.loss)
@@ -196,7 +198,7 @@ class CriticNetwork(object):
 # ===========================
 
 def build_summaries():
-    episode_reward = tf.Variable(0.,name="episode_reward")
+    episode_reward = tf.Variable(0., name="episode_reward")
     tf.summary.scalar("Reward", episode_reward)
     episode_ave_max_q = tf.Variable(0., name="episode_ave_max_q")
     tf.summary.scalar("Qmax Value", episode_ave_max_q)
@@ -277,7 +279,7 @@ def train(sess, env, args, actor, critic):
 
             if done:
 
-                if i % 1000 == 0:
+                if i % 10 == 0:
                     summary_str = sess.run(summary_ops, feed_dict={
                         summary_vars[0]: ep_reward,
                         summary_vars[1]: ep_ave_max_q / float(j + 1),
@@ -325,7 +327,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
 
     # agent parameters
-    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.0001)
+    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.01)
     parser.add_argument('--critic-lr', help='critic network learning rate', default=0.001)
     parser.add_argument('--gamma', help='discount factor for critic updates', default=0.99)
     parser.add_argument('--tau', help='soft target update parameter', default=0.001)
