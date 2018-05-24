@@ -2,8 +2,8 @@ import numpy as np
 import tensorflow as tf
 from guessing_sum_env import *
 
-HIDDEN_VECTOR_LEN = 2
-VECTOR_OBS_LEN = 2
+HIDDEN_VECTOR_LEN = 1
+VECTOR_OBS_LEN = 1
 NUM_AGENTS = 5
 OUTPUT_LEN = 1
 BATCH_SIZE = 10
@@ -123,9 +123,9 @@ class CommNet:
             # TODO merge action
             # baseline = tf.layers.dense(tf.reshape(H, (1, NUM_AGENTS * HIDDEN_VECTOR_LEN)), units=1,
             #                                    kernel_initializer=tf.contrib.layers.xavier_initializer())
-
+            # TODO correctly merge action and H
             baseline = tf.layers.dense(
-                tf.reshape([H, action], (1, NUM_AGENTS * HIDDEN_VECTOR_LEN + NUM_AGENTS * OUTPUT_LEN)), units=1,
+                tf.reshape([H, action], (BATCH_SIZE, NUM_AGENTS * HIDDEN_VECTOR_LEN + NUM_AGENTS * OUTPUT_LEN)), units=1,
                 kernel_initializer=tf.contrib.layers.xavier_initializer())
 
             baseline = tf.squeeze(baseline)
@@ -143,13 +143,19 @@ if __name__ == '__main__':
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
-        shape = (BATCH_SIZE, NUM_AGENTS, VECTOR_OBS_LEN)
-        observation = tf.placeholder(tf.float32, shape=shape)
+        obs_shape = (BATCH_SIZE, NUM_AGENTS, VECTOR_OBS_LEN)
+        observation = tf.placeholder(tf.float32, shape=obs_shape)
 
-        out = CommNet.actor_build_network("actor_network", observation)
+        action_shape = (BATCH_SIZE, NUM_AGENTS, OUTPUT_LEN)
+        actions = tf.placeholder(tf.float32, shape=action_shape)
+
+        actor_out = CommNet.actor_build_network("actor_network", observation)
+        critic_out = CommNet.critic_build_network("critic_network", observation, actions)
 
         sess.run(tf.global_variables_initializer())
 
-        feed_dict = {observation: np.random.random_sample(shape)}
+        feed_dict = {observation: np.random.random_sample(obs_shape)}
+        print(sess.run(actor_out, feed_dict=feed_dict).shape, "==", (BATCH_SIZE, NUM_AGENTS, OUTPUT_LEN))
 
-        print(sess.run(out, feed_dict=feed_dict))
+        feed_dict = {observation: np.random.random_sample(obs_shape), actions: np.random.random_sample(action_shape)}
+        print(sess.run(critic_out, feed_dict=feed_dict).shape, "==", (BATCH_SIZE, 1))
