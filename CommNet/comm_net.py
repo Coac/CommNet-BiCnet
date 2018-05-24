@@ -2,18 +2,28 @@ import numpy as np
 import tensorflow as tf
 from guessing_sum_env import *
 
-HIDDEN_VECTOR_LEN = 1
-NUM_AGENTS = 1
-VECTOR_OBS_LEN = 1
+HIDDEN_VECTOR_LEN = 2
+VECTOR_OBS_LEN = 2
+NUM_AGENTS = 5
 OUTPUT_LEN = 1
+BATCH_SIZE = 10
 
 
 class CommNet:
     @staticmethod
     def base_build_network(observation):
+        # foo = tf.constant([[[1], [2], [3]], [[4], [5], [6]], [[7], [8], [9]]])
+        #
+        # print(foo[:, 0].eval())
+        # print(tf.concat([tf.zeros((3,0, 1), tf.int32), tf.reshape(foo[:, 0], (3, 1, 1))], 1).eval())
+        #
+        # print(tf.zeros((5,0)).eval())
+        #
+        # return
+
         # H0 = CommNet.encoder(observation)
-        H0 = tf.reshape(observation, (NUM_AGENTS, HIDDEN_VECTOR_LEN))
-        C0 = tf.zeros((NUM_AGENTS, HIDDEN_VECTOR_LEN), name="C0")
+        H0 = observation
+        C0 = tf.zeros(H0.shape, name="C0")
         H1, C1 = CommNet.comm_step("comm_step1", H0, C0)
         H2, _ = CommNet.comm_step("comm_step2", H1, C1, H0)
         # H3, _ = CommNet.comm_step("comm_step3", H2, C2, H0)
@@ -62,30 +72,29 @@ class CommNet:
     @staticmethod
     def comm_step(name, H, C, H0_skip_con=None):
         with tf.variable_scope(name):
-            next_H = []
+            next_H = tf.zeros(shape=(BATCH_SIZE, 0, HIDDEN_VECTOR_LEN))
             for j in range(NUM_AGENTS):
-                h = H[j]
-                c = C[j]
+                h = H[:, j]
+                c = C[:, j]
 
-                next_h = CommNet.module(h, c)
-                next_H.append(next_h)
+                next_h = CommNet.module(h, c)  # shape (BATCH_SIZE, HIDDEN_VECTOR_LEN)
+                next_H = tf.concat([next_H, tf.reshape(next_h, (BATCH_SIZE, 1, HIDDEN_VECTOR_LEN))], 1)
 
-            next_H = tf.stack(next_H)
             next_H = tf.identity(next_H, "H")
 
             if H0_skip_con is not None:
                 next_H = tf.add(next_H, H0_skip_con)
 
-            next_C = []
+            next_C = tf.zeros(shape=(BATCH_SIZE, 0, HIDDEN_VECTOR_LEN))
             for j1 in range(NUM_AGENTS):
                 next_c = []
                 for j2 in range(NUM_AGENTS):
                     if j1 != j2:
-                        next_c.append(next_H[j2])
+                        next_c.append(next_H[:, j2])
                 next_c = tf.reduce_mean(tf.stack(next_c), 0)
                 next_c = tf.where(tf.is_nan(next_c), tf.zeros_like(next_c), next_c)
 
-                next_C.append(next_c)
+                next_C = tf.concat([next_C, tf.reshape(next_c, (BATCH_SIZE, 1, HIDDEN_VECTOR_LEN))], 1)
 
             return next_H, tf.identity(next_C, "C")
 
@@ -134,7 +143,7 @@ if __name__ == '__main__':
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     with tf.Session(config=config) as sess:
-        shape = (NUM_AGENTS, VECTOR_OBS_LEN)
+        shape = (BATCH_SIZE, NUM_AGENTS, VECTOR_OBS_LEN)
         observation = tf.placeholder(tf.float32, shape=shape)
 
         out = CommNet.actor_build_network("actor_network", observation)
