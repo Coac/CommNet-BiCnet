@@ -21,7 +21,7 @@ class ReplayBuffer(object):
     def add(self, state, action, reward, done, state2):
         experience = (state, action, reward, done, state2)
         self.wip = experience # TODO
-        if self.count < self.buffer_size: 
+        if self.count < self.buffer_size:
             self.buffer.append(experience)
             self.count += 1
         else:
@@ -33,14 +33,10 @@ class ReplayBuffer(object):
 
     def sample_batch(self, batch_size):
         return self.wip
-        batch = []
-
         if self.count < batch_size:
             batch = random.sample(self.buffer, self.count)
         else:
             batch = random.sample(self.buffer, batch_size)
-
-        batch = [0]
 
         s_batch = np.array([_[0] for _ in batch])
         a_batch = np.array([_[1] for _ in batch])

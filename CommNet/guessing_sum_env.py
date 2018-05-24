@@ -11,7 +11,7 @@ class GuessingSumEnv:
             raise Exception('got input shape ', actions.shape, ' instead of ', (self.num_agents, 1))
 
         observations = None
-        rewards = -np.abs(actions - self.sum)
+        rewards = -np.abs(actions - 1)
 
         done = True
         info = None

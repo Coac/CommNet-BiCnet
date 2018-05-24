@@ -5,7 +5,7 @@ import tensorflow as tf
 from guessing_sum_env import *
 
 HIDDEN_VECTOR_LEN = 1
-NUM_AGENTS = 5
+NUM_AGENTS = 1
 VECTOR_OBS_LEN = 1
 OUTPUT_LEN = 1
 
@@ -16,14 +16,15 @@ class CommNet:
         H0 = CommNet.encoder(observation)
         C0 = tf.zeros((NUM_AGENTS, HIDDEN_VECTOR_LEN), name="C0")
         H1, C1 = CommNet.comm_step("comm_step1", H0, C0)
-        H2, C2 = CommNet.comm_step("comm_step2", H1, C1)
-        H3, _ = CommNet.comm_step("comm_step3", H2, C2, H0)
-        return H3
+        H2, _ = CommNet.comm_step("comm_step2", H1, C1, H0)
+        # H3, _ = CommNet.comm_step("comm_step3", H2, C2, H0)
+        return H2
 
     @staticmethod
     def actor_build_network(name, observation):
         with tf.variable_scope(name):
             H = CommNet.base_build_network(observation)
+
             return CommNet.actor_output_layer(H)
 
     @staticmethod
@@ -64,6 +65,7 @@ class CommNet:
             for j in range(NUM_AGENTS):
                 h = H[j]
                 c = C[j]
+
                 next_h = CommNet.module(h, c)
                 next_H.append(next_h)
 
@@ -80,6 +82,8 @@ class CommNet:
                     if j1 != j2:
                         next_c.append(next_H[j2])
                 next_c = tf.reduce_mean(tf.stack(next_c), 0)
+                next_c = tf.where(tf.is_nan(next_c), 0., next_c)
+
                 next_C.append(next_c)
 
             return next_H, tf.identity(next_C, "C")
@@ -109,7 +113,6 @@ class CommNet:
             # TODO merge action
             # baseline = tf.layers.dense(tf.reshape(H, (1, NUM_AGENTS * HIDDEN_VECTOR_LEN)), units=1,
             #                                    kernel_initializer=tf.contrib.layers.xavier_initializer())
-
 
             baseline = tf.layers.dense(
                 tf.reshape([H, action], (1, NUM_AGENTS * HIDDEN_VECTOR_LEN + NUM_AGENTS * OUTPUT_LEN)), units=1,

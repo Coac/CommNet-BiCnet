@@ -8,13 +8,12 @@ from datetime import datetime
 
 import numpy as np
 import tensorflow as tf
+from comm_net import CommNet
 from guessing_sum_env import *
 from replay_buffer import ReplayBuffer
 
-from CommNet import comm_net
-
 HIDDEN_VECTOR_LEN = 1
-NUM_AGENTS = 5
+NUM_AGENTS = 1
 VECTOR_OBS_LEN = 1
 OUTPUT_LEN = 1
 
@@ -32,11 +31,10 @@ class ActorNetwork(object):
     between -action_bound and action_bound
     """
 
-    def __init__(self, sess, state_dim, action_dim, action_bound, learning_rate, tau, batch_size):
+    def __init__(self, sess, state_dim, action_dim, learning_rate, tau, batch_size):
         self.sess = sess
         self.s_dim = state_dim
         self.a_dim = action_dim
-        self.action_bound = action_bound
         self.learning_rate = learning_rate
         self.tau = tau
         self.batch_size = batch_size
@@ -77,14 +75,14 @@ class ActorNetwork(object):
             self.network_params) + len(self.target_network_params)
 
     def create_actor_network(self, name):
-        inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN))
-        out = comm_net.actor_build_network(name, inputs)
+        inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN), name="actor_inputs")
+        out = CommNet.actor_build_network(name, inputs)
         return inputs, out
 
-    def train(self, inputs, a_gradient):
+    def train(self, inputs, action_gradient):
         self.sess.run(self.optimize, feed_dict={
             self.inputs: inputs,
-            self.action_gradient: a_gradient
+            self.action_gradient: action_gradient
         })
 
     def predict(self, inputs):
@@ -152,10 +150,10 @@ class CriticNetwork(object):
         self.action_grads = tf.gradients(self.out, self.action)
 
     def create_critic_network(self, name):
-        inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN))
-        action = tf.placeholder(tf.float32, shape=(NUM_AGENTS, OUTPUT_LEN))
+        inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN), name="critic_inputs")
+        action = tf.placeholder(tf.float32, shape=(NUM_AGENTS, OUTPUT_LEN), name="critic_action")
 
-        out = comm_net.critic_build_network(name, inputs, action)
+        out = CommNet.critic_build_network(name, inputs, action)
         return inputs, action, out
 
     def train(self, inputs, action, predicted_q_value):
@@ -288,7 +286,7 @@ def train(sess, env, args, actor, critic):
 def main(args):
     tf.reset_default_graph()
     with tf.Session() as sess:
-        env = GuessingSumEnv()
+        env = GuessingSumEnv(NUM_AGENTS)
         env.seed(0)
 
         np.random.seed(int(args['random_seed']))
@@ -297,9 +295,8 @@ def main(args):
 
         state_dim = (NUM_AGENTS, VECTOR_OBS_LEN)
         action_dim = (NUM_AGENTS, OUTPUT_LEN)
-        action_bound = 10
 
-        actor = ActorNetwork(sess, state_dim, action_dim, action_bound,
+        actor = ActorNetwork(sess, state_dim, action_dim,
                              float(args['actor_lr']), float(args['tau']),
                              int(args['minibatch_size']))
 
