@@ -19,7 +19,7 @@ class GuessingSumEnv:
         return observations, rewards, done, info
 
     def reset(self):
-        observations = np.random.normal(size=(self.num_agents, 1))
+        observations = np.random.normal(size=(self.num_agents, 1)) / self.num_agents
         self.sum = np.sum(observations)
         return observations
 
