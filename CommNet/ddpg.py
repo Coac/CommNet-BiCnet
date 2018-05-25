@@ -1,4 +1,4 @@
-""" 
+"""
 Implementation of DDPG - Deep Deterministic Policy Gradient https://github.com/pemami4911/deep-rl
 Modified by Coac for CommNet implementation https://github.com/Coac/CommNet-BiCnet
 """
@@ -59,7 +59,7 @@ class ActorNetwork(object):
                  for i in range(len(self.target_network_params))]
 
         # This gradient will be provided by the critic network
-        self.action_gradient = tf.placeholder(tf.float32, self.a_dim, name="action_gradient")
+        self.action_gradient = tf.placeholder(tf.float32, (None, self.a_dim[0], self.a_dim[1]), name="action_gradient")
 
         # self.out = tf.reshape(self.out, self.action_gradient.shape)
 
@@ -81,7 +81,7 @@ class ActorNetwork(object):
             self.network_params) + len(self.target_network_params)
 
     def create_actor_network(self, name):
-        inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN), name="actor_inputs")
+        inputs = tf.placeholder(tf.float32, shape=(None, NUM_AGENTS, VECTOR_OBS_LEN), name="actor_inputs")
         out = CommNet.actor_build_network(name, inputs)
         return inputs, out
 
@@ -142,7 +142,7 @@ class CriticNetwork(object):
                  for i in range(len(self.target_network_params))]
 
         # Network target (y_i)
-        self.predicted_q_value = tf.placeholder(tf.float32, (), name="predicted_q_value")
+        self.predicted_q_value = tf.placeholder(tf.float32, (None, 1), name="predicted_q_value")
 
         # Define loss and optimization Op
         self.loss = tf.losses.mean_squared_error(self.predicted_q_value, self.out)
@@ -158,8 +158,8 @@ class CriticNetwork(object):
         self.action_grads = tf.gradients(self.out, self.action, name="action_grads")
 
     def create_critic_network(self, name):
-        inputs = tf.placeholder(tf.float32, shape=(NUM_AGENTS, VECTOR_OBS_LEN), name="critic_inputs")
-        action = tf.placeholder(tf.float32, shape=(NUM_AGENTS, OUTPUT_LEN), name="critic_action")
+        inputs = tf.placeholder(tf.float32, shape=(None, NUM_AGENTS, VECTOR_OBS_LEN), name="critic_inputs")
+        action = tf.placeholder(tf.float32, shape=(None, NUM_AGENTS, OUTPUT_LEN), name="critic_action")
 
         out = CommNet.critic_build_network(name, inputs, action)
         return inputs, action, out
@@ -238,17 +238,16 @@ def train(sess, env, args, actor, critic):
             if args['render_env']:
                 env.render()
 
-            action = actor.predict(state)
+            action = actor.predict([state])[0]
 
             state2, reward, done, info = env.step(action)
             reward = np.sum(reward)
 
-            replay_buffer.add(state, action, reward,
-                              done, state2)
+            replay_buffer.add(state, action, reward, done, state2)
 
             # Keep adding experience to the memory until
             # there are at least minibatch size samples
-            if True or replay_buffer.size() > int(args['minibatch_size']):
+            if replay_buffer.size() > int(args['minibatch_size']):
                 s_batch, a_batch, r_batch, t_batch, s2_batch = \
                     replay_buffer.sample_batch(int(args['minibatch_size']))
 
@@ -260,10 +259,9 @@ def train(sess, env, args, actor, critic):
                 target_q = tf.zeros((1))
 
                 # Update the critic given the targets
-                predicted_q_value, _ = critic.train(
-                    s_batch, a_batch, r_batch)
+                predicted_q_value, _ = critic.train(s_batch, a_batch, np.reshape(r_batch, (int(args['minibatch_size']), 1)))
 
-                ep_ave_max_q += predicted_q_value
+                ep_ave_max_q += np.amax(predicted_q_value)
 
                 # Update the actor policy using the sampled gradient
                 a_outs = actor.predict(s_batch)
@@ -327,8 +325,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
 
     # agent parameters
-    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.01)
-    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.1)
+    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.1)
+    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.01)
     parser.add_argument('--gamma', help='discount factor for critic updates', default=0.99)
     parser.add_argument('--tau', help='soft target update parameter', default=0.001)
     parser.add_argument('--buffer-size', help='max size of the replay buffer', default=1000000)
