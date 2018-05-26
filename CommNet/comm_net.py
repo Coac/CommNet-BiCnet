@@ -122,11 +122,16 @@ class CommNet:
     def critic_output_layer(H, action):
         batch_size = tf.shape(H)[0]
         with tf.variable_scope("critic_output", reuse=tf.AUTO_REUSE):
-            baseline = tf.layers.dense(tf.stack([H, action], 1), units=1,
-                kernel_initializer=tf.contrib.layers.xavier_initializer())
 
-            baseline = tf.squeeze(baseline)
-
+            print(tf.concat([H, action], 2))
+            baseline = tf.layers.dense(inputs=tf.concat([H, action], 2),
+                                       units=1,
+                                       activation=tf.tanh,
+                                       kernel_initializer=tf.contrib.layers.xavier_initializer())
+            baseline = tf.squeeze(baseline, [2])
+            baseline = tf.layers.dense(inputs=baseline,
+                                       units=1,
+                                       kernel_initializer=tf.contrib.layers.xavier_initializer())
             tf.summary.histogram("w_baseline", tf.get_variable("dense/kernel"))
 
             return baseline
