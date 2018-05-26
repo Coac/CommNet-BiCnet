@@ -13,7 +13,7 @@ from guessing_sum_env import *
 from replay_buffer import ReplayBuffer
 
 HIDDEN_VECTOR_LEN = 1
-NUM_AGENTS = 1
+NUM_AGENTS = 2
 VECTOR_OBS_LEN = 1
 OUTPUT_LEN = 1
 
@@ -327,11 +327,11 @@ if __name__ == '__main__':
 
     # agent parameters
     parser.add_argument('--actor-lr', help='actor network learning rate', default=0.1)
-    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.01)
+    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.1)
     parser.add_argument('--gamma', help='discount factor for critic updates', default=0.99)
     parser.add_argument('--tau', help='soft target update parameter', default=0.001)
     parser.add_argument('--buffer-size', help='max size of the replay buffer', default=1000000)
-    parser.add_argument('--minibatch-size', help='size of minibatch for minibatch-SGD', default=1)
+    parser.add_argument('--minibatch-size', help='size of minibatch for minibatch-SGD', default=1024)
 
     # run parameters
     parser.add_argument('--random-seed', help='random seed for repeatability', default=1234)

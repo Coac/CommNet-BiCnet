@@ -4,7 +4,7 @@ from guessing_sum_env import *
 
 # TODO use the parameters of train_ddpg
 HIDDEN_VECTOR_LEN = 1
-NUM_AGENTS = 1
+NUM_AGENTS = 2
 VECTOR_OBS_LEN = 1
 OUTPUT_LEN = 1
 
