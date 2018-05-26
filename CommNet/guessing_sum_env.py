@@ -11,7 +11,7 @@ class GuessingSumEnv:
             raise Exception('got input shape ', actions.shape, ' instead of ', (self.num_agents, 1))
 
         observations = None
-        rewards = -np.abs(actions - self.sum)
+        rewards = -np.abs(actions - self.sum) / self.num_agents
 
         done = True
         info = None
@@ -19,7 +19,7 @@ class GuessingSumEnv:
         return observations, rewards, done, info
 
     def reset(self):
-        observations = np.random.normal(size=(self.num_agents, 1)) / self.num_agents
+        observations = np.random.uniform(low=-1.0, high=1.0, size=(self.num_agents, 1)) / self.num_agents
         self.sum = np.sum(observations)
         return observations
 

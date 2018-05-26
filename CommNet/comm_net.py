@@ -8,6 +8,7 @@ NUM_AGENTS = 1
 VECTOR_OBS_LEN = 1
 OUTPUT_LEN = 1
 
+
 class CommNet:
     @staticmethod
     def base_build_network(observation):
@@ -120,10 +121,7 @@ class CommNet:
 
     @staticmethod
     def critic_output_layer(H, action):
-        batch_size = tf.shape(H)[0]
         with tf.variable_scope("critic_output", reuse=tf.AUTO_REUSE):
-
-            print(tf.concat([H, action], 2))
             baseline = tf.layers.dense(inputs=tf.concat([H, action], 2),
                                        units=1,
                                        activation=tf.tanh,
@@ -158,11 +156,13 @@ if __name__ == '__main__':
         feed_dict = {observation: np.random.random_sample((BATCH_SIZE, NUM_AGENTS, OUTPUT_LEN))}
         print(sess.run(actor_out, feed_dict=feed_dict).shape, "==", (BATCH_SIZE, NUM_AGENTS, OUTPUT_LEN))
 
-        feed_dict = {observation: np.random.random_sample((BATCH_SIZE, NUM_AGENTS, VECTOR_OBS_LEN)), actions: np.random.random_sample((BATCH_SIZE, NUM_AGENTS, OUTPUT_LEN))}
+        feed_dict = {observation: np.random.random_sample((BATCH_SIZE, NUM_AGENTS, VECTOR_OBS_LEN)),
+                     actions: np.random.random_sample((BATCH_SIZE, NUM_AGENTS, OUTPUT_LEN))}
         print(sess.run(critic_out, feed_dict=feed_dict).shape, "==", (BATCH_SIZE, 1))
 
         feed_dict = {observation: np.random.random_sample((1, NUM_AGENTS, VECTOR_OBS_LEN))}
         print(sess.run(actor_out, feed_dict=feed_dict).shape, "==", (1, NUM_AGENTS, OUTPUT_LEN))
 
-        feed_dict = {observation: np.random.random_sample((1, NUM_AGENTS, VECTOR_OBS_LEN)), actions: np.random.random_sample((1, NUM_AGENTS, OUTPUT_LEN))}
+        feed_dict = {observation: np.random.random_sample((1, NUM_AGENTS, VECTOR_OBS_LEN)),
+                     actions: np.random.random_sample((1, NUM_AGENTS, OUTPUT_LEN))}
         print(sess.run(critic_out, feed_dict=feed_dict).shape, "==", (1, 1))
