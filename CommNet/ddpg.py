@@ -71,8 +71,6 @@ class ActorNetwork(object):
             # for i in range(len(self.actor_gradients)):
             #     self.actor_gradients[i] = tf.Print(self.actor_gradients[i], [self.actor_gradients[i]], message=str(self.network_params[i]))
 
-
-
         # Optimization Op
         self.optimize = tf.train.AdamOptimizer(self.learning_rate)
         self.optimize = self.optimize.apply_gradients(zip(self.actor_gradients, self.network_params))
@@ -165,7 +163,7 @@ class CriticNetwork(object):
         return inputs, action, out
 
     def train(self, inputs, action, predicted_q_value):
-        return self.sess.run([self.out, self.optimize], feed_dict={
+        return self.sess.run([self.out, self.optimize, self.loss], feed_dict={
             self.inputs: inputs,
             self.action: action,
             self.predicted_q_value: predicted_q_value
@@ -202,8 +200,10 @@ def build_summaries():
     tf.summary.scalar("Reward", episode_reward)
     episode_ave_max_q = tf.Variable(0., name="episode_ave_max_q")
     tf.summary.scalar("Qmax Value", episode_ave_max_q)
+    loss = tf.Variable(0., name="critic_loss")
+    tf.summary.scalar("Critic_loss", loss)
 
-    summary_vars = [episode_reward, episode_ave_max_q]
+    summary_vars = [episode_reward, episode_ave_max_q, loss]
     summary_ops = tf.summary.merge_all()
 
     return summary_ops, summary_vars
@@ -232,6 +232,7 @@ def train(sess, env, args, actor, critic):
 
         ep_reward = 0
         ep_ave_max_q = 0
+        loss = 0
 
         for j in range(int(args['max_episode_len'])):
 
@@ -259,7 +260,8 @@ def train(sess, env, args, actor, critic):
                 target_q = tf.zeros((1))
 
                 # Update the critic given the targets
-                predicted_q_value, _ = critic.train(s_batch, a_batch, np.reshape(r_batch, (int(args['minibatch_size']), 1)))
+                predicted_q_value, _, loss = critic.train(s_batch, a_batch,
+                                                          np.reshape(r_batch, (int(args['minibatch_size']), 1)))
 
                 ep_ave_max_q += np.amax(predicted_q_value)
 
@@ -281,8 +283,7 @@ def train(sess, env, args, actor, critic):
                     summary_str = sess.run(summary_ops, feed_dict={
                         summary_vars[0]: ep_reward,
                         summary_vars[1]: ep_ave_max_q / float(j + 1),
-                        # "critic_network/critic_action": 1,
-                        # "predicted_q_value": 1,
+                        summary_vars[2]: loss
                     })
 
                     writer.add_summary(summary_str, i)
