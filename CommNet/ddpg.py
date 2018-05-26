@@ -274,23 +274,25 @@ def train(sess, env, args, actor, critic):
                 actor.update_target_network()
                 critic.update_target_network()
 
+                replay_buffer.clear()
+
+                # Log
+                summary_str = sess.run(summary_ops, feed_dict={
+                    summary_vars[0]: np.mean(r_batch),
+                    summary_vars[1]: ep_ave_max_q / float(j + 1),
+                    summary_vars[2]: loss
+                })
+
+                writer.add_summary(summary_str, i)
+                writer.flush()
+
+                print('| Reward: {:.4f} | Episode: {:d} | Qmax: {:.4f}'.format(np.mean(r_batch),
+                                                                               i, (ep_ave_max_q / float(j + 1))))
+
             state = state2
             ep_reward += reward
 
             if done:
-
-                if i % 10 == 0:
-                    summary_str = sess.run(summary_ops, feed_dict={
-                        summary_vars[0]: ep_reward,
-                        summary_vars[1]: ep_ave_max_q / float(j + 1),
-                        summary_vars[2]: loss
-                    })
-
-                    writer.add_summary(summary_str, i)
-                    writer.flush()
-
-                    print('| Reward: {:.4f} | Episode: {:d} | Qmax: {:.4f}'.format(ep_reward,
-                                                                                   i, (ep_ave_max_q / float(j + 1))))
                 break
 
 
@@ -326,7 +328,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
 
     # agent parameters
-    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.1)
+    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.01)
     parser.add_argument('--critic-lr', help='critic network learning rate', default=0.1)
     parser.add_argument('--gamma', help='discount factor for critic updates', default=0.99)
     parser.add_argument('--tau', help='soft target update parameter', default=0.001)
@@ -335,7 +337,7 @@ if __name__ == '__main__':
 
     # run parameters
     parser.add_argument('--random-seed', help='random seed for repeatability', default=1234)
-    parser.add_argument('--max-episodes', help='max num of episodes to do while training', default=50000)
+    parser.add_argument('--max-episodes', help='max num of episodes to do while training', default=9999999999999)
     parser.add_argument('--max-episode-len', help='max length of 1 episode', default=1000)
     parser.add_argument('--render-env', help='render the gym env', action='store_true')
     parser.add_argument('--use-gym-monitor', help='record gym results', action='store_true')
