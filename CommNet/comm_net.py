@@ -12,15 +12,6 @@ OUTPUT_LEN = 1
 class CommNet:
     @staticmethod
     def base_build_network(observation):
-        # foo = tf.constant([[[1], [2], [3]], [[4], [5], [6]], [[7], [8], [9]]])
-        #
-        # print(foo[:, 0].eval())
-        # print(tf.concat([tf.zeros((3,0, 1), tf.int32), tf.reshape(foo[:, 0], (3, 1, 1))], 1).eval())
-        #
-        # print(tf.zeros((5,0)).eval())
-        #
-        # return
-
         # H0 = CommNet.encoder(observation)
         H0 = observation
         C0 = tf.zeros(tf.shape(H0), name="C0")
@@ -61,8 +52,6 @@ class CommNet:
                                   initializer=tf.contrib.layers.xavier_initializer())
             w_C = tf.get_variable(name='w_C', shape=HIDDEN_VECTOR_LEN,
                                   initializer=tf.contrib.layers.xavier_initializer())
-
-            # w_H = tf.Print(w_H, [w_H], message=tf.get_default_graph().get_name_scope() + "w_H")
 
             tf.summary.histogram('w_H', w_H)
             tf.summary.histogram('w_C', w_C)
