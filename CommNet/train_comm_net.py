@@ -249,7 +249,9 @@ def train(sess, env, args, actor, critic):
                 break
 
 
-def main(args):
+def main():
+    args = parse_arg()
+
     tf.reset_default_graph()
     with tf.Session() as sess:
         env = GuessingSumEnv(NUM_AGENTS)
@@ -274,7 +276,7 @@ def main(args):
         train(sess, env, args, actor, critic)
 
 
-if __name__ == '__main__':
+def parse_arg():
     parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
 
     # agent parameters
@@ -298,4 +300,8 @@ if __name__ == '__main__':
 
     pp.pprint(args)
 
-    main(args)
+    return args
+
+
+if __name__ == '__main__':
+    main()
