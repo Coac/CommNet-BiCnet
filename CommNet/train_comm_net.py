@@ -181,7 +181,7 @@ def train(sess, env, args, actor, critic):
     summary_ops, summary_vars = build_summaries()
 
     sess.run(tf.global_variables_initializer())
-    writer = tf.summary.FileWriter(args['summary_dir'], sess.graph)
+    writer = tf.summary.FileWriter(args['summary_dir'] +  " actor_lr" + str(args['actor_lr']) + " critic_lr" + str(args["critic_lr"]), sess.graph)
 
     actor.update_target_network()
     critic.update_target_network()
@@ -249,11 +249,13 @@ def train(sess, env, args, actor, critic):
                 break
 
 
-def main():
-    args = parse_arg()
+def main(args):
+    args = parse_arg(args or None)
 
     tf.reset_default_graph()
-    with tf.Session() as sess:
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+    with tf.Session(config=config) as sess:
         env = GuessingSumEnv(NUM_AGENTS)
         env.seed(0)
 
@@ -276,12 +278,12 @@ def main():
         train(sess, env, args, actor, critic)
 
 
-def parse_arg():
+def parse_arg(args):
     parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
 
     # agent parameters
     parser.add_argument('--actor-lr', help='actor network learning rate', default=0.01)
-    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.1)
+    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.15)
     parser.add_argument('--gamma', help='discount factor for critic updates', default=0.99)
     parser.add_argument('--tau', help='soft target update parameter', default=0.001)
     parser.add_argument('--buffer-size', help='max size of the replay buffer', default=1000000)
@@ -294,9 +296,7 @@ def parse_arg():
     parser.add_argument('--summary-dir', help='directory for storing tensorboard info',
                         default="summaries/" + datetime.now().strftime('%d-%m-%y %H%M'))
 
-    parser.set_defaults(render_env=False)
-
-    args = vars(parser.parse_args())
+    args = vars(parser.parse_args(args))
 
     pp.pprint(args)
 
