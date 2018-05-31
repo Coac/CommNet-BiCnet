@@ -249,7 +249,7 @@ def train(sess, env, args, actor, critic):
                 break
 
 
-def main(args):
+def main(args=None):
     args = parse_arg(args or None)
 
     tf.reset_default_graph()
@@ -278,7 +278,7 @@ def main(args):
         train(sess, env, args, actor, critic)
 
 
-def parse_arg(args):
+def parse_arg(args=None):
     parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
 
     # agent parameters
@@ -296,7 +296,10 @@ def parse_arg(args):
     parser.add_argument('--summary-dir', help='directory for storing tensorboard info',
                         default="summaries/" + datetime.now().strftime('%d-%m-%y %H%M'))
 
-    args = vars(parser.parse_args(args))
+    if args is not None:
+        args = vars(parser.parse_args(args))
+    else:
+        args = vars(parser.parse_args())
 
     pp.pprint(args)
 
