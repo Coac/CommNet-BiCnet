@@ -142,7 +142,7 @@ if __name__ == '__main__':
 
         sess.run(tf.global_variables_initializer())
 
-        feed_dict = {observation: np.random.random_sample((BATCH_SIZE, NUM_AGENTS, OUTPUT_LEN))}
+        feed_dict = {observation: np.random.random_sample((BATCH_SIZE, NUM_AGENTS, VECTOR_OBS_LEN))}
         print(sess.run(actor_out, feed_dict=feed_dict).shape, "==", (BATCH_SIZE, NUM_AGENTS, OUTPUT_LEN))
 
         feed_dict = {observation: np.random.random_sample((BATCH_SIZE, NUM_AGENTS, VECTOR_OBS_LEN)),
