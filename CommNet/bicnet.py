@@ -3,10 +3,10 @@ import tensorflow as tf
 from guessing_sum_env import *
 
 # TODO use the parameters of train_ddpg
-HIDDEN_VECTOR_LEN = 9
-NUM_AGENTS = 3
-VECTOR_OBS_LEN = 5
-OUTPUT_LEN = 10
+HIDDEN_VECTOR_LEN = 1
+NUM_AGENTS = 2
+VECTOR_OBS_LEN = 1
+OUTPUT_LEN = 1
 
 
 class BiCNet:
@@ -26,7 +26,7 @@ class BiCNet:
     def actor_build_network(name, observation):
         with tf.variable_scope(name):
             outputs = BiCNet.base_build_network(observation)
-            return BiCNet.shared_dense_layer("output_layer", observation, OUTPUT_LEN)
+            return BiCNet.shared_dense_layer("output_layer", outputs, OUTPUT_LEN)
 
 
     @staticmethod
@@ -43,8 +43,12 @@ class BiCNet:
     @staticmethod
     def critic_build_network(name, observation, action):
         with tf.variable_scope(name):
-            outputs = BiCNet.base_build_network(observation)
-            return BiCNet.shared_dense_layer("output_layer", observation, 1)
+            print(tf.concat([observation, action], 2))
+            outputs = BiCNet.base_build_network(tf.concat([observation, action], 2))
+            outputs = BiCNet.shared_dense_layer("output_layer", outputs, 1)
+            # TODO no merge 1 reward
+            outputs = tf.squeeze(outputs, [2])
+            return tf.layers.dense(outputs, 1, name="global_reward")
 
 
 if __name__ == '__main__':
