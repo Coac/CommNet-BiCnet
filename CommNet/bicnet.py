@@ -19,6 +19,10 @@ class BiCNet:
         lstm_fw_cell = tf.nn.rnn_cell.BasicLSTMCell(HIDDEN_VECTOR_LEN, forget_bias=1.0, name="lstm_fw_cell")
         lstm_bw_cell = tf.nn.rnn_cell.BasicLSTMCell(HIDDEN_VECTOR_LEN, forget_bias=1.0, name="lstm_bw_cell")
         outputs, _, _ = tf.nn.static_bidirectional_rnn(lstm_fw_cell, lstm_bw_cell, hidden_agents, dtype=tf.float32)
+        with tf.variable_scope("bidirectional_rnn", reuse=tf.AUTO_REUSE):
+            tf.summary.histogram("lstm_fw_cell/kernel", tf.get_variable("fw/lstm_fw_cell/kernel"))
+            tf.summary.histogram("lstm_bw_cell/kernel", tf.get_variable("bw/lstm_bw_cell/kernel"))
+
         outputs = tf.stack(outputs, 1)
         return outputs
 
@@ -36,19 +40,21 @@ class BiCNet:
             for j in range(NUM_AGENTS):
                 agent_obs = observation[:, j]
                 agent_encoded = tf.layers.dense(agent_obs, output_len, name="dense")
+                tf.summary.histogram(name + "/dense/kernel", tf.get_variable("dense/kernel"))
                 H.append(agent_encoded)
             H = tf.stack(H, 1)
         return H
 
     @staticmethod
     def critic_build_network(name, observation, action):
-        with tf.variable_scope(name):
-            print(tf.concat([observation, action], 2))
+        with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
             outputs = BiCNet.base_build_network(tf.concat([observation, action], 2))
             outputs = BiCNet.shared_dense_layer("output_layer", outputs, 1)
             # TODO no merge 1 reward
             outputs = tf.squeeze(outputs, [2])
-            return tf.layers.dense(outputs, 1, name="global_reward")
+            outputs = tf.layers.dense(outputs, 1, name="global_reward")
+            tf.summary.histogram("global_reward/kernel", tf.get_variable("global_reward/kernel"))
+            return outputs
 
 
 if __name__ == '__main__':
