@@ -9,6 +9,7 @@ from datetime import datetime
 import numpy as np
 import tensorflow as tf
 from comm_net import CommNet
+# from bicnet import BiCNet as CommNet
 from guessing_sum_env import *
 from replay_buffer import ReplayBuffer
 
@@ -198,7 +199,7 @@ def train(sess, env, args, actor, critic):
             action = actor.predict([state])[0]
 
             state2, reward, done, info = env.step(action)
-            reward = np.sum(reward)
+            reward = np.sum(reward) / NUM_AGENTS
 
             replay_buffer.add(state, action, reward, done, state2)
 
@@ -282,8 +283,8 @@ def parse_arg(args=None):
     parser = argparse.ArgumentParser(description='provide arguments for DDPG agent')
 
     # agent parameters
-    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.01)
-    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.15)
+    parser.add_argument('--actor-lr', help='actor network learning rate', default=0.1)
+    parser.add_argument('--critic-lr', help='critic network learning rate', default=0.1)
     parser.add_argument('--gamma', help='discount factor for critic updates', default=0.99)
     parser.add_argument('--tau', help='soft target update parameter', default=0.001)
     parser.add_argument('--buffer-size', help='max size of the replay buffer', default=1000000)

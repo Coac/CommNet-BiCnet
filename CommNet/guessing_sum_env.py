@@ -5,21 +5,25 @@ class GuessingSumEnv:
     def __init__(self, num_agents=5):
         self.num_agents = num_agents
         self.sum = 0
+        self.scale = 10.0
+        self.sum_scale = self.num_agents * self.scale
 
     def step(self, actions):
         if actions.shape != (self.num_agents, 1):
             raise Exception('got input shape ', actions.shape, ' instead of ', (self.num_agents, 1))
 
         observations = None
-        rewards = -np.abs(actions - self.sum) / 2 / self.num_agents
+        rewards = -np.abs(actions - self.sum) # [-Inf ; 0]
+
+        normalized_rewards = (np.maximum(rewards, -self.sum_scale) + self.sum_scale) / self.sum_scale # [0 ; 1]
 
         done = True
         info = None
 
-        return observations, rewards, done, info
+        return observations, normalized_rewards, done, info
 
     def reset(self):
-        observations = np.random.uniform(low=-1.0, high=1.0, size=(self.num_agents, 1)) / self.num_agents
+        observations = np.clip(np.random.normal(size=(self.num_agents, 1)), -self.scale, self.scale)
         self.sum = np.sum(observations)
         return observations
 
