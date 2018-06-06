@@ -50,12 +50,7 @@ class BiCNet:
         with tf.variable_scope(name, reuse=tf.AUTO_REUSE):
             outputs = BiCNet.base_build_network(tf.concat([observation, action], 2))
             outputs = BiCNet.shared_dense_layer("output_layer", outputs, 1)
-            # TODO no merge 1 reward
-            outputs = tf.squeeze(outputs, [2])
-            outputs = tf.layers.dense(outputs, 1, name="global_reward")
-            tf.summary.histogram("global_reward/kernel", tf.get_variable("global_reward/kernel"))
             return outputs
-
 
 if __name__ == '__main__':
     tf.set_random_seed(42)
