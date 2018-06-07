@@ -113,7 +113,10 @@ class CriticNetwork(object):
 
         self.predicted_q_value = tf.placeholder(tf.float32, (None, NUM_AGENTS, 1), name="predicted_q_value")
 
-        self.loss = tf.losses.mean_squared_error(self.predicted_q_value, self.out)
+        M = tf.to_float(tf.shape(self.out)[0])
+        # Li = (Yi - Qi)^2
+        # L = Sum(Li)
+        self.loss = tf.squeeze(1.0/M * tf.reduce_sum(tf.reduce_sum(tf.square(self.predicted_q_value - self.out), axis=1), axis=0), name="critic_loss")
 
         self.optimize = tf.train.AdamOptimizer(
             self.learning_rate).minimize(self.loss)
