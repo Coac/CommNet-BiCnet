@@ -45,11 +45,18 @@ class ActorNetwork(object):
                                                       tf.multiply(self.target_network_params[i], 1. - self.tau))
                  for i in range(len(self.target_network_params))]
 
-        self.action_gradient = tf.placeholder(tf.float32, (None, self.a_dim[0], self.a_dim[1]), name="action_gradient")
+        self.action_gradient = tf.placeholder(tf.float32, (NUM_AGENTS, None, NUM_AGENTS, OUTPUT_LEN), name="action_gradient")
+
 
         with tf.name_scope("actor_gradients"):
-            self.unnormalized_actor_gradients = tf.gradients(self.out, self.network_params, -self.action_gradient)
+            grads = []
+            for i in range(NUM_AGENTS):
+                for j in range(NUM_AGENTS):
+                    grads.append(tf.gradients(self.out[:, j], self.network_params, -self.action_gradient[j][:, i]))
+            grads = np.array(grads)
+            self.unnormalized_actor_gradients = [tf.reduce_sum(list(grads[:, i]), axis=0) for i in range(len(grads[:]))]
             self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.unnormalized_actor_gradients))
+
 
         self.optimize = tf.train.AdamOptimizer(self.learning_rate)
         self.optimize = self.optimize.apply_gradients(zip(self.actor_gradients, self.network_params))
@@ -121,7 +128,9 @@ class CriticNetwork(object):
         self.optimize = tf.train.AdamOptimizer(
             self.learning_rate).minimize(self.loss)
 
-        self.action_grads = tf.gradients(self.out, self.action, name="action_grads")
+        # self.action_grads = tf.gradients(self.out, self.action, name="action_grads")
+        self.action_grads = [tf.gradients(self.out[:, i], self.action) for i in range(NUM_AGENTS)]
+        self.action_grads = tf.stack(tf.squeeze(self.action_grads, 1))
 
     def create_critic_network(self, name):
         inputs = tf.placeholder(tf.float32, shape=(None, NUM_AGENTS, VECTOR_OBS_LEN), name="critic_inputs")
@@ -224,7 +233,7 @@ def train(sess, env, args, actor, critic):
                 # Update the actor policy using the sampled gradient
                 a_outs = actor.predict(s_batch)
                 grads = critic.action_gradients(s_batch, a_outs)
-                actor.train(s_batch, grads[0])
+                actor.train(s_batch, grads)
 
                 actor.update_target_network()
                 critic.update_target_network()
