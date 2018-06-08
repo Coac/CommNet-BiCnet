@@ -54,9 +54,8 @@ class ActorNetwork(object):
                 for j in range(NUM_AGENTS):
                     grads.append(tf.gradients(self.out[:, j], self.network_params, -self.action_gradient[j][:, i]))
             grads = np.array(grads)
-            self.unnormalized_actor_gradients = [tf.reduce_sum(list(grads[:, i]), axis=0) for i in range(len(grads[:]))]
+            self.unnormalized_actor_gradients = [tf.reduce_sum(list(grads[:, i]), axis=0) for i in range(len(self.network_params))]
             self.actor_gradients = list(map(lambda x: tf.div(x, self.batch_size), self.unnormalized_actor_gradients))
-
 
         self.optimize = tf.train.AdamOptimizer(self.learning_rate)
         self.optimize = self.optimize.apply_gradients(zip(self.actor_gradients, self.network_params))
