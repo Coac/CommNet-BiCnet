@@ -1,5 +1,5 @@
 # CommNet-BiCnet
-CommNet and BiCnet implementation in tensorflow
+[CommNet](https://arxiv.org/abs/1605.07736) and [BiCnet](https://arxiv.org/abs/1703.10069) implementation in tensorflow
 
 ## Training
 Train CommNet using DDPG algorithm
