@@ -24,7 +24,6 @@ class CommNet:
     def actor_build_network(name, observation):
         with tf.variable_scope(name):
             H = CommNet.base_build_network(observation)
-            return H
             return CommNet.actor_output_layer(H)
 
     @staticmethod
@@ -99,12 +98,16 @@ class CommNet:
             tf.summary.histogram('w_out', w_out)
             tf.summary.histogram('b_out', b_out)
 
+            batch_size = tf.shape(H)[0]
+
             actions = []
             for j in range(NUM_AGENTS):
-                h = tf.slice(H, [j, 0], [1, HIDDEN_VECTOR_LEN])
-                action = tf.squeeze(tf.matmul(h, w_out) + b_out)
+                h = tf.slice(H, [0, j, 0], [batch_size, 1, HIDDEN_VECTOR_LEN])
+                w_out_batch = tf.tile(tf.expand_dims(w_out, axis=0), [batch_size, 1, 1])
+                action =  tf.squeeze(tf.matmul(h, w_out_batch) + b_out, [1])
+
                 actions.append(action)
-            actions = tf.stack(actions, name="actions")
+            actions = tf.stack(actions, name="actions", axis=1)
 
         return actions
 
